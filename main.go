@@ -19,7 +19,7 @@ import (
 )
 
 var (
-	dstNetFlag  = flag.String("dst-net", "2001:4c08:2028", "the destination network of the ipv6 tree")
+	dstNetFlag  = flag.String("dst-net", "2001:610:1908:a000", "the destination network of the ipv6 tree")
 	imageFlag   = flag.String("image", "", "the image to ping to the tree")
 	xOffFlag    = flag.Int("x", 0, "the x offset to draw the image")
 	yOffFlag    = flag.Int("y", 0, "the y offset to draw the image")
@@ -28,8 +28,8 @@ var (
 )
 
 const (
-	maxX = 160
-	maxY = 120
+	maxX = 1280
+	maxY = 1024
 )
 
 // filled on package initialization. Contains a simple ICMPv6 ECHO request.
@@ -98,18 +98,21 @@ func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 	var addrs []*net.IPAddr
 
 	bounds := img.Bounds()
-	for y := 0; y < bounds.Dy() && y+yOff < maxY; y++ {
-		for x := 0; x < bounds.Dx() && x+xOff < maxX; x++ {
+	for y := 0; y < bounds.Dy(); y++ {
+		for x := 0; x < bounds.Dx(); x++ {
 			r, g, b, a := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
 			if a > 0 {
+				// Each channel is 16-bit, just shift down for 8-bit needed
+				// for the display
+				ip := fmt.Sprintf("%s:%x:%x:%02x%02x:%02x%02x", dstNet, x+xOff, y+yOff, r>>8, g>>8, b>>8, a>>8)
+				//fmt.Println(ip)
 				addrs = append(addrs, &net.IPAddr{
-					// Each channel is 16-bit, just shift down for 8-bit needed
-					// for the display
-					IP: net.ParseIP(fmt.Sprintf("%s:%d:%d:%x:%x:%x", dstNet, x+xOff, y+yOff, r>>8, g>>8, b>>8)),
+					IP: net.ParseIP(ip),
 				})
 			}
 		}
 	}
+	// os.Exit(0)
 
 	return addrs
 }
