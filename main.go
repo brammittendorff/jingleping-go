@@ -110,7 +110,7 @@ func shuffle(a []*net.IPAddr) {
 // addresses to ping to draw the image to the board.
 func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 	var addrs []*net.IPAddr
-
+	tip := net.ParseIP(fmt.Sprintf("%s::", dstNet))
 	bounds := img.Bounds()
 	for y := 0; y < bounds.Dy(); y++ {
 		for x := 0; x < bounds.Dx(); x++ {
@@ -118,11 +118,24 @@ func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 			a = a >> 8
 			if a > 0 {
 				// Each channel is 16-bit, just shift down for 8-bit needed
-				// for the display
-				ip := fmt.Sprintf("%s:%x:%x:%02x%02x:%02x%02x", dstNet, x+xOff, y+yOff, b>>8, g>>8, r>>8, a)
-				//fmt.Println(ip)
+
+				ip := make(net.IP, len(tip))
+				copy(ip, tip)
+
+				// x
+				ip[8] = byte((x + xOff) >> 8)
+				ip[9] = byte(x + xOff)
+				// y
+				ip[10] = byte((y + yOff) >> 8)
+				ip[11] = byte(y + yOff)
+				// rgba
+				ip[12] = byte(b >> 8)
+				ip[13] = byte(g >> 8)
+				ip[14] = byte(r >> 8)
+				ip[15] = uint8(a)
+
 				addrs = append(addrs, &net.IPAddr{
-					IP: net.ParseIP(ip),
+					IP: ip,
 				})
 			}
 		}
