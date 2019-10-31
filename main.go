@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"os/signal"
@@ -38,17 +39,25 @@ var pingPacket []byte
 // worker drains the incoming channel, sending ping packets to the incoming
 // addresses.
 func worker(ch <-chan *net.IPAddr) {
-	c, err := icmp.ListenPacket("ip6:ipv6-icmp", "::")
-	if err != nil {
-		log.Fatalf("could not open ping socket: %s", err)
-	}
 	log.Printf("starting worker")
 
 	for {
+		c, err := icmp.ListenPacket("ip6:ipv6-icmp", "::")
+		if err != nil {
+			log.Fatalf("could not open ping socket: %s", err)
+		}
+
 		for a := range ch {
 			_, err = c.WriteTo(pingPacket, a)
 			if err != nil {
 				log.Printf("warning: could not send ping packet: %s", err)
+				c2, err := icmp.ListenPacket("ip6:ipv6-icmp", "::")
+				if err != nil {
+					log.Fatalf("could not open ping socket: %s", err)
+				} else {
+					c.Close()
+					c = c2
+				}
 			}
 		}
 	}
@@ -91,6 +100,13 @@ func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration, 
 	}
 }
 
+func shuffle(a []*net.IPAddr) {
+	for i := range a {
+		j := rand.Intn(i + 1)
+		a[i], a[j] = a[j], a[i]
+	}
+}
+
 // makeAddrs takes an image or frame, along with the destination network of the
 // display board and desired offset for the image, and yields a list of
 // addresses to ping to draw the image to the board.
@@ -104,7 +120,7 @@ func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 			if a > 0 {
 				// Each channel is 16-bit, just shift down for 8-bit needed
 				// for the display
-				ip := fmt.Sprintf("%s:%x:%x:%02x%02x:%02x%02x", dstNet, x+xOff, y+yOff, r>>8, g>>8, b>>8, a>>8)
+				ip := fmt.Sprintf("%s:%x:%x:%02x%02x:%02x%02x", dstNet, x+xOff, y+yOff, b>>8, g>>8, r>>8, a>>8)
 				//fmt.Println(ip)
 				addrs = append(addrs, &net.IPAddr{
 					IP: net.ParseIP(ip),
@@ -113,7 +129,7 @@ func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 		}
 	}
 	// os.Exit(0)
-
+	shuffle(addrs)
 	return addrs
 }
 
