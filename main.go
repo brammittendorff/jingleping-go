@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"syscall"
 	"time"
 
 	_ "image/gif"
@@ -26,11 +27,12 @@ var (
 	yOffFlag    = flag.Int("y", 0, "the y offset to draw the image")
 	rateFlag    = flag.Int("rate", 5, "how many times to draw the image per second")
 	workersFlag = flag.Int("workers", 1, "the number of workers to use")
+	onceFlag    = flag.Bool("once", false, "abort after 1 loop")
 )
 
 const (
-	maxX = 1280
-	maxY = 1024
+	maxX = 1920
+	maxY = 1080
 )
 
 // filled on package initialization. Contains a simple ICMPv6 ECHO request.
@@ -76,19 +78,15 @@ func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration, 
 			for {
 				repeat := time.NewTimer(time.Second / time.Duration(rate))
 				for _, a := range frame {
-					select {
-					case <-ticker.C:
-						continue Frame
-					case ch <- a:
+					ch <- a
+				}
+				if *onceFlag {
+					for 0 != len(ch) {
+						time.Sleep(1 * time.Second)
 					}
+					syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+					return
 				}
-				// check ticker only first so we don't queue another redraw
-				select {
-				case <-ticker.C:
-					continue Frame
-				default:
-				}
-
 				// then wait on both
 				select {
 				case <-ticker.C:
@@ -117,10 +115,11 @@ func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 	for y := 0; y < bounds.Dy(); y++ {
 		for x := 0; x < bounds.Dx(); x++ {
 			r, g, b, a := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+			a = a >> 8
 			if a > 0 {
 				// Each channel is 16-bit, just shift down for 8-bit needed
 				// for the display
-				ip := fmt.Sprintf("%s:%x:%x:%02x%02x:%02x%02x", dstNet, x+xOff, y+yOff, b>>8, g>>8, r>>8, a>>8)
+				ip := fmt.Sprintf("%s:%x:%x:%02x%02x:%02x%02x", dstNet, x+xOff, y+yOff, b>>8, g>>8, r>>8, a)
 				//fmt.Println(ip)
 				addrs = append(addrs, &net.IPAddr{
 					IP: net.ParseIP(ip),
