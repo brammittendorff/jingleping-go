@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	dstNetFlag  = flag.String("dst-net", "2001:610:1908:a000", "the destination network of the ipv6 tree")
+	dstNetFlag  = flag.String("dst-net", "2001:610:1908:a000::", "the destination network of the ipv6 tree")
 	imageFlag   = flag.String("image", "", "the image to ping to the tree")
 	xOffFlag    = flag.Int("x", 0, "the x offset to draw the image")
 	yOffFlag    = flag.Int("y", 0, "the y offset to draw the image")
@@ -110,7 +110,7 @@ func shuffle(a []*net.IPAddr) {
 // addresses to ping to draw the image to the board.
 func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 	var addrs []*net.IPAddr
-	tip := net.ParseIP(fmt.Sprintf("%s::", dstNet))
+	tip := net.ParseIP(dstNet)
 	bounds := img.Bounds()
 	for y := 0; y < bounds.Dy(); y++ {
 		for x := 0; x < bounds.Dx(); x++ {
@@ -200,7 +200,7 @@ func main() {
 	go fill(pixCh, frames, delays, *rateFlag)
 
 	for i := 0; i < *workersFlag; i++ {
-		go worker(pixCh)
+		go workerPCAP(pixCh, *dstNetFlag)
 	}
 
 	// wait for interruption
