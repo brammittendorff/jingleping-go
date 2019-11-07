@@ -86,16 +86,20 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string) {
 
 	// And create the packet with the layers
 	buffer = gopacket.NewSerializeBuffer()
-	for ip := range ch {
-		ipLayer.DstIP = ip.IP
-		gopacket.SerializeLayers(buffer, options,
-			ethernetLayer,
-			ipLayer,
-			icmpLayer,
-			icmpEchoLayer,
-		)
 
-		outgoingPacket := buffer.Bytes()
+	gopacket.SerializeLayers(buffer, options,
+		ethernetLayer,
+		ipLayer,
+		icmpLayer,
+		icmpEchoLayer,
+	)
+
+	outgoingPacket := buffer.Bytes()
+
+	for ip := range ch {
+		rawip := ip.IP.To16()
+
+		copy(outgoingPacket[38:], []byte(rawip))
 		err = handle.WritePacketData(outgoingPacket)
 	}
 }
