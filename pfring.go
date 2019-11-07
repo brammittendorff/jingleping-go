@@ -1,32 +1,23 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net"
-	"time"
+	//	"fmt"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/pfring"
 
 	"github.com/ghedo/go.pkt/routing"
 )
 
-var (
-	device      string
-	snapshotLen int32 = 1024
-	promiscuous       = false
-	err         error
-	options     gopacket.SerializeOptions
-	router      = "00:05:73:a0:00:00"
-)
-
-func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string) {
-	timeout := 30 * time.Second
+func workerPFRing(ch <-chan *net.IPAddr, dstAddr, dev string) {
 
 	dstIP := net.ParseIP(dstAddr)
 	route, err := routing.RouteTo(dstIP)
+
+	var handle *pfring.Ring
 	if err != nil {
 		log.Fatalf("Error: %s", err)
 	}
@@ -40,10 +31,18 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string) {
 	}
 
 	// Open device
-	handle, err := pcap.OpenLive(device, snapshotLen, promiscuous, timeout)
-	if err != nil {
-		log.Fatal(err)
+	if handle, err = pfring.NewRing(device, 65536, 0); err != nil {
+		log.Fatalln(err)
 	}
+
+	if err = handle.SetSocketMode(pfring.WriteOnly); err != nil {
+		log.Fatalln(err)
+	}
+
+	if err = handle.Enable(); err != nil {
+		log.Fatalln(err)
+	}
+
 	defer handle.Close()
 
 	options = gopacket.SerializeOptions{
@@ -98,25 +97,4 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string) {
 		outgoingPacket := buffer.Bytes()
 		err = handle.WritePacketData(outgoingPacket)
 	}
-}
-
-// Return the default IPv6 address of a network interface.
-func getRouteSourceIP(r *routing.Route) (net.IP, error) {
-	iface := r.Iface
-
-	addrs, err := iface.Addrs()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok {
-			ip6 := ipnet.IP.To16()
-			if ip4 := ipnet.IP.To4(); ip4 == nil && ip6[0] != 0xfe {
-				return ip6, nil
-			}
-		}
-	}
-
-	return nil, fmt.Errorf("No address found")
 }

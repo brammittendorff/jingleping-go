@@ -21,13 +21,16 @@ import (
 )
 
 var (
-	dstNetFlag  = flag.String("dst-net", "2001:610:1908:a000::", "the destination network of the ipv6 tree")
-	imageFlag   = flag.String("image", "", "the image to ping to the tree")
-	xOffFlag    = flag.Int("x", 0, "the x offset to draw the image")
-	yOffFlag    = flag.Int("y", 0, "the y offset to draw the image")
-	rateFlag    = flag.Int("rate", 5, "how many times to draw the image per second")
-	workersFlag = flag.Int("workers", 1, "the number of workers to use")
-	onceFlag    = flag.Bool("once", false, "abort after 1 loop")
+	dstNetFlag        = flag.String("dst-net", "2001:610:1908:a000::", "the destination network of the ipv6 tree")
+	imageFlag         = flag.String("image", "", "the image to ping to the tree")
+	xOffFlag          = flag.Int("x", 0, "the x offset to draw the image")
+	yOffFlag          = flag.Int("y", 0, "the y offset to draw the image")
+	rateFlag          = flag.Int("rate", 5, "how many times to draw the image per second")
+	workersFlag       = flag.Int("workers", 1, "the number of workers to use")
+	onceFlag          = flag.Bool("once", false, "abort after 1 loop")
+	pcapFlag          = flag.Bool("pcap", false, "Use PCAP for sending")
+	pfringFlag        = flag.Bool("pfring", false, "Use PF_RING for sending")
+	destInterfaceFlag = flag.String("interface", "", "Use interface for outgoing traffic for pcap/pfring")
 )
 
 const (
@@ -200,7 +203,13 @@ func main() {
 	go fill(pixCh, frames, delays, *rateFlag)
 
 	for i := 0; i < *workersFlag; i++ {
-		go workerPCAP(pixCh, *dstNetFlag)
+		if *pcapFlag {
+			go workerPCAP(pixCh, *dstNetFlag, *destInterfaceFlag)
+		} else if *pfringFlag {
+			go workerPFRing(pixCh, *dstNetFlag, *destInterfaceFlag)
+		} else {
+			go worker(pixCh)
+		}
 	}
 
 	// wait for interruption
