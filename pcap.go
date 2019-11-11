@@ -22,7 +22,7 @@ var (
 	router      = "00:05:73:a0:00:00"
 )
 
-func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string) {
+func workerPCAP(ch <-chan []*net.IPAddr, dstAddr, dev string) {
 	timeout := 30 * time.Second
 
 	dstIP := net.ParseIP(dstAddr)
@@ -96,11 +96,13 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string) {
 
 	outgoingPacket := buffer.Bytes()
 
-	for ip := range ch {
-		rawip := ip.IP.To16()
+	for ips := range ch {
+		for _, ip := range ips {
+			rawip := ip.IP.To16()
 
-		copy(outgoingPacket[38:], []byte(rawip))
-		err = handle.WritePacketData(outgoingPacket)
+			copy(outgoingPacket[38:], []byte(rawip))
+			err = handle.WritePacketData(outgoingPacket)
+		}
 	}
 }
 

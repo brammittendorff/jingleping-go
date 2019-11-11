@@ -13,7 +13,7 @@ import (
 	"github.com/ghedo/go.pkt/routing"
 )
 
-func workerPFRing(ch <-chan *net.IPAddr, dstAddr, dev string) {
+func workerPFRing(ch <-chan []*net.IPAddr, dstAddr, dev string) {
 
 	dstIP := net.ParseIP(dstAddr)
 	route, err := routing.RouteTo(dstIP)
@@ -32,7 +32,7 @@ func workerPFRing(ch <-chan *net.IPAddr, dstAddr, dev string) {
 	}
 
 	// Open device
-	if handle, err = pfring.NewRing(device, 65536, 0); err != nil {
+	if handle, err = pfring.NewRing(device, 128, 0); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -96,10 +96,12 @@ func workerPFRing(ch <-chan *net.IPAddr, dstAddr, dev string) {
 
 	outgoingPacket := buffer.Bytes()
 
-	for ip := range ch {
-		rawip := ip.IP.To16()
+	for ips := range ch {
+		for _, ip := range ips {
+			rawip := ip.IP.To16()
 
-		copy(outgoingPacket[38:], []byte(rawip))
-		err = handle.WritePacketData(outgoingPacket)
+			copy(outgoingPacket[38:], []byte(rawip))
+			err = handle.WritePacketData(outgoingPacket)
+		}
 	}
 }

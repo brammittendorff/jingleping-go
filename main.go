@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 )
 
 var (
+	chunk             = 1000
 	dstNetFlag        = flag.String("dst-net", "2001:610:1908:a000::", "the destination network of the ipv6 tree")
 	imageFlag         = flag.String("image", "", "the image to ping to the tree")
 	xOffFlag          = flag.Int("x", 0, "the x offset to draw the image")
@@ -43,7 +45,7 @@ var pingPacket []byte
 
 // worker drains the incoming channel, sending ping packets to the incoming
 // addresses.
-func worker(ch <-chan *net.IPAddr) {
+func worker(ch <-chan []*net.IPAddr) {
 	log.Printf("starting worker")
 
 	for {
@@ -53,16 +55,8 @@ func worker(ch <-chan *net.IPAddr) {
 		}
 
 		for a := range ch {
-			_, err = c.WriteTo(pingPacket, a)
-			if err != nil {
-				log.Printf("warning: could not send ping packet: %s", err)
-				c2, err := icmp.ListenPacket("ip6:ipv6-icmp", "::")
-				if err != nil {
-					log.Fatalf("could not open ping socket: %s", err)
-				} else {
-					c.Close()
-					c = c2
-				}
+			for _, aa := range a {
+				_, err = c.WriteTo(pingPacket, aa)
 			}
 		}
 	}
@@ -71,17 +65,24 @@ func worker(ch <-chan *net.IPAddr) {
 // fill fills the pixel channel with the frame(s) of desired image. Each frame
 // has its own delay, which the filler uses to time consecutive frames. The
 // filler loops forever.
-func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration, rate int) {
+func fill(ch chan<- []*net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration, rate int) {
+	end := 0
 	for {
 	Frame:
 		for fidx, frame := range frames {
+			runtime.GC()
 			// frame clock
 			ticker := time.NewTimer(delay[fidx])
 
 			for {
 				repeat := time.NewTimer(time.Second / time.Duration(rate))
-				for _, a := range frame {
-					ch <- a
+				framelen := len(frame)
+				for i := 0; i < len(frame); i += chunk {
+					end = i + chunk
+					if end > framelen {
+						end = framelen
+					}
+					ch <- frame[i:end]
 				}
 				if *onceFlag {
 					for 0 != len(ch) {
@@ -199,7 +200,7 @@ func main() {
 
 	log.Printf("queue length: %d", qLen)
 
-	pixCh := make(chan *net.IPAddr, qLen)
+	pixCh := make(chan []*net.IPAddr, qLen/chunk)
 	go fill(pixCh, frames, delays, *rateFlag)
 
 	for i := 0; i < *workersFlag; i++ {
