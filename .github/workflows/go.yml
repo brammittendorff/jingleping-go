@@ -1,0 +1,13 @@
+name: Go
+on: [push]
+jobs:
+
+  go-lint:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v1
+    - name: Lint
+      uses: pipelinecomponents/go-lint@master
+ 
