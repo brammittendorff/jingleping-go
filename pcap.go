@@ -14,15 +14,15 @@ import (
 )
 
 var (
-	device       string = "eth0"
-	snapshot_len int32  = 1024
-	promiscuous  bool   = false
-	err          error
-	options      gopacket.SerializeOptions
-	router       string = "00:05:73:a0:00:00"
+	device      string
+	snapshotLen int32 = 1024
+	promiscuous       = false
+	err         error
+	options     gopacket.SerializeOptions
+	routermac   = "00:05:73:a0:00:00"
 )
 
-func workerPCAP(ch <-chan *net.IPAddr, dstAddr string) {
+func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 	timeout := 30 * time.Second
 
 	dstIP := net.ParseIP(dstAddr)
@@ -31,14 +31,16 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr string) {
 		log.Fatalf("Error: %s", err)
 	}
 
-	if route == nil {
+	if dev != "" {
+		device = dev
+	} else if route == nil {
 		log.Println("No route found")
 	} else {
 		device = route.Iface.Name
 	}
 
 	// Open device
-	handle, err := pcap.OpenLive(device, snapshot_len, promiscuous, timeout)
+	handle, err := pcap.OpenLive(device, snapshotLen, promiscuous, timeout)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,7 +69,7 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr string) {
 		// TypeCode:   layers.IPProtocolICMPv6,
 	}
 
-	dstmac, _ := net.ParseMAC("44:d3:ca:5f:61:40")
+	dstmac, _ := net.ParseMAC(routermac)
 	ethernetLayer := &layers.Ethernet{
 		EthernetType: layers.EthernetTypeIPv6,
 		SrcMAC:       route.Iface.HardwareAddr,
