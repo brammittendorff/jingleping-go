@@ -116,5 +116,5 @@ func getRouteSourceIP(r *routing.Route) (net.IP, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("No address found")
+	return nil, fmt.Errorf("no address found")
 }

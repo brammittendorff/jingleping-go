@@ -32,6 +32,7 @@ var (
 	// pfringFlag        = flag.Bool("pfring", false, "Use PF_RING for sending")
 	destInterfaceFlag = flag.String("interface", "eth0", "Use interface for outgoing traffic for pcap/pfring")
 	routermac         = flag.String("destmac", "00:00:5e:00:01:77", "Destination mac interface ( aka router )")
+	randomize         = flag.Bool("randomize", true, "randomize x/y for beter result on heavy pingload")
 )
 
 const (
@@ -103,10 +104,7 @@ func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration, 
 }
 
 func shuffle(a []*net.IPAddr) {
-	for i := range a {
-		j := rand.Intn(i + 1)
-		a[i], a[j] = a[j], a[i]
-	}
+	rand.Shuffle(len(a), func(i, j int) { a[i], a[j] = a[j], a[i] })
 }
 
 // makeAddrs takes an image or frame, along with the destination network of the
@@ -151,7 +149,9 @@ func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 		}
 	}
 	// os.Exit(0)
-	shuffle(addrs)
+	if *randomize {
+		shuffle(addrs)
+	}
 	return addrs
 }
 
