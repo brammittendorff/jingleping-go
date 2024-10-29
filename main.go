@@ -116,8 +116,8 @@ func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 	var addrs []*net.IPAddr
 	tip := net.ParseIP(dstNet)
 	bounds := img.Bounds()
-	for y := 0; y < bounds.Dy(); y++ {
-		for x := 0; x < bounds.Dx(); x++ {
+	for y := 0; y < bounds.Dy() && y+yOff <= maxY; y++ {
+		for x := 0; x < bounds.Dx() && x+xOff <= maxX; x++ {
 			r, g, b, a := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
 			a = a >> 8
 			if a > 0 {
