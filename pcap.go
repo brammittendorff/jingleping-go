@@ -19,7 +19,7 @@ var (
 	promiscuous       = false
 	err         error
 	options     gopacket.SerializeOptions
-	routermac   = "00:05:73:a0:00:00"
+	// routermac   = "00:05:73:a0:00:00"
 )
 
 func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
@@ -53,11 +53,6 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 
 	// rawBytes := []byte{10, 20, 30}
 
-	// Create a properly formed packet, just with
-	// empty details. Should fill out MAC addresses,
-	// IP addresses, etc.
-	buffer := gopacket.NewSerializeBuffer()
-
 	// This time lets fill out some information
 	srcIP, _ := getRouteSourceIP(route)
 	ipLayer := &layers.IPv6{
@@ -84,8 +79,11 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 		Identifier: 1,
 	}
 
+	// Create a properly formed packet, just with
+	// empty details. Should fill out MAC addresses,
+	// IP addresses, etc.
 	// And create the packet with the layers
-	buffer = gopacket.NewSerializeBuffer()
+	buffer := gopacket.NewSerializeBuffer()
 	for ip := range ch {
 		ipLayer.DstIP = ip.IP
 		gopacket.SerializeLayers(buffer, options,
