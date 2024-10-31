@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -17,16 +16,16 @@ var (
 	device      string
 	snapshotLen int32 = 1024
 	promiscuous       = false
-	err         error
-	options     gopacket.SerializeOptions
+	// err         error
+	options gopacket.SerializeOptions
 	// routermac   = "00:05:73:a0:00:00"
 )
 
 func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
-	timeout := 30 * time.Second
 
 	dstIP := net.ParseIP(dstAddr)
 	route, err := routing.RouteTo(dstIP)
+
 	if err != nil {
 		log.Fatalf("Error: %s", err)
 	}
@@ -38,9 +37,14 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 	} else {
 		device = route.Iface.Name
 	}
+	deviceInt, err := net.InterfaceByName(device)
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Open device
-	handle, err := pcap.OpenLive(device, snapshotLen, promiscuous, timeout)
+	handle, err := pcap.OpenLive(device, snapshotLen, promiscuous, pcap.BlockForever)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,7 +52,7 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 
 	options = gopacket.SerializeOptions{
 		FixLengths:       true,
-		ComputeChecksums: true,
+		ComputeChecksums: false, // true,
 	}
 
 	// rawBytes := []byte{10, 20, 30}
@@ -65,9 +69,11 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 	}
 
 	dstmac, _ := net.ParseMAC(routermac)
+	srcmac := deviceInt.HardwareAddr
+
 	ethernetLayer := &layers.Ethernet{
 		EthernetType: layers.EthernetTypeIPv6,
-		SrcMAC:       route.Iface.HardwareAddr,
+		SrcMAC:       srcmac,
 		DstMAC:       dstmac,
 	}
 	icmpLayer := &layers.ICMPv6{
@@ -94,7 +100,7 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 		)
 
 		outgoingPacket := buffer.Bytes()
-		err = handle.WritePacketData(outgoingPacket)
+		_ = handle.WritePacketData(outgoingPacket)
 	}
 }
 
