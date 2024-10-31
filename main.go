@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	_ "image/gif"
@@ -84,7 +83,7 @@ func fill(ch chan<- *net.IPAddr, frames [][]*net.IPAddr, delay []time.Duration, 
 					for 0 != len(ch) {
 						time.Sleep(1 * time.Second)
 					}
-					syscall.Kill(syscall.Getpid(), syscall.SIGINT)
+					exit()
 					return
 				}
 				// then wait on both
