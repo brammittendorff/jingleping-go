@@ -4,7 +4,6 @@ package main
 
 import (
 	"syscall"
-	"os"
 )
 
 func exit() {
