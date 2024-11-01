@@ -28,7 +28,7 @@ var (
 	rateFlag    = flag.Int("rate", 5, "how many times to draw the image per second")
 	workersFlag = flag.Int("workers", 1, "the number of workers to use")
 	onceFlag    = flag.Bool("once", false, "abort after 1 loop")
-	pcapFlag    = flag.Bool("pcap", false, "Use PCAP for sending")
+	afpacketFlag    = flag.Bool("afpacket", false, "Use afpacket for sending")
 	// pfringFlag        = flag.Bool("pfring", false, "Use PF_RING for sending")
 	destInterfaceFlag = flag.String("interface", "eth0", "Use interface for outgoing traffic for pcap/pfring")
 	routermac         = flag.String("destmac", "00:00:5e:00:01:77", "Destination mac interface ( aka router )")
@@ -210,8 +210,8 @@ func main() {
 	go fill(pixCh, frames, delays, *rateFlag)
 
 	for i := 0; i < *workersFlag; i++ {
-		if *pcapFlag {
-			go workerPCAP(pixCh, *dstNetFlag, *destInterfaceFlag, *routermac)
+		if *afpacketFlag {
+			go workerafpacket(pixCh, *dstNetFlag, *destInterfaceFlag, *routermac)
 			// } else if(*pfringFlag) {
 			// 	go workerPFRing(pixCh, *dstNetFlag)
 		} else {
