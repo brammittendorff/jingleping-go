@@ -4,24 +4,88 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"time"
 
 	"github.com/google/gopacket"
+	"github.com/google/gopacket/afpacket"
 	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
 
 	"github.com/ghedo/go.pkt/routing"
 )
 
 var (
 	device      string
-	snapshotLen int32 = 1024
-	promiscuous       = false
+	snapshotLen int32 = 100
 	// err         error
 	options gopacket.SerializeOptions
 	// routermac   = "00:05:73:a0:00:00"
+	block_size int = 8
 )
 
-func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
+type afpacketHandle struct {
+	TPacket *afpacket.TPacket
+}
+
+func afpacketComputeSize(targetSizeMb int, snaplen int, pageSize int) (
+	frameSize int, blockSize int, numBlocks int, err error) {
+
+	if snaplen < pageSize {
+		frameSize = pageSize / (pageSize / snaplen)
+	} else {
+		frameSize = (snaplen/pageSize + 1) * pageSize
+	}
+
+	// 128 is the default from the gopacket library so just use that
+	blockSize = frameSize * 128
+	numBlocks = (targetSizeMb * 1024 * 1024) / blockSize
+
+	if numBlocks == 0 {
+		return 0, 0, 0, fmt.Errorf("interface buffersize is too small")
+	}
+
+	return frameSize, blockSize, numBlocks, nil
+}
+
+func newAfpacketHandle(device string, snaplen int, block_size int, num_blocks int,
+	useVLAN bool, timeout time.Duration) (*afpacketHandle, error) {
+
+	h := &afpacketHandle{}
+	var err error
+
+	if device == "any" {
+		h.TPacket, err = afpacket.NewTPacket(
+			afpacket.OptFrameSize(snaplen),
+			afpacket.OptBlockSize(block_size),
+			afpacket.OptNumBlocks(num_blocks),
+			afpacket.OptAddVLANHeader(useVLAN),
+			afpacket.OptPollTimeout(timeout),
+			afpacket.SocketRaw,
+			afpacket.TPacketVersion3)
+	} else {
+		h.TPacket, err = afpacket.NewTPacket(
+			afpacket.OptInterface(device),
+			afpacket.OptFrameSize(snaplen),
+			afpacket.OptBlockSize(block_size),
+			afpacket.OptNumBlocks(num_blocks),
+			afpacket.OptAddVLANHeader(useVLAN),
+			afpacket.OptPollTimeout(timeout),
+			afpacket.SocketRaw,
+			afpacket.TPacketVersion3)
+	}
+	return h, err
+}
+
+// Close will close afpacket source.
+func (h *afpacketHandle) Close() {
+	h.TPacket.Close()
+}
+
+func workerafpacket(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
+	szFrame, szBlock, numBlocks, err := afpacketComputeSize(block_size, int(snapshotLen), os.Getpagesize())
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	dstIP := net.ParseIP(dstAddr)
 	route, err := routing.RouteTo(dstIP)
@@ -44,11 +108,11 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 	}
 
 	// Open device
-	handle, err := pcap.OpenLive(device, snapshotLen, promiscuous, pcap.BlockForever)
+	afpacketHandle, err := newAfpacketHandle(device, szFrame, szBlock, numBlocks, false, -time.Millisecond*10)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer handle.Close()
+	defer afpacketHandle.Close()
 
 	options = gopacket.SerializeOptions{
 		FixLengths:       true,
@@ -100,7 +164,7 @@ func workerPCAP(ch <-chan *net.IPAddr, dstAddr, dev string, routermac string) {
 		)
 
 		outgoingPacket := buffer.Bytes()
-		_ = handle.WritePacketData(outgoingPacket)
+		_ = afpacketHandle.TPacket.WritePacketData(outgoingPacket)
 	}
 }
 
