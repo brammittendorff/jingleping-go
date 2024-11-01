@@ -16,7 +16,7 @@ import (
 
 var (
 	device      string
-	snapshotLen int32 = 100
+	snapshotLen int32 = 4096
 	// err         error
 	options gopacket.SerializeOptions
 	// routermac   = "00:05:73:a0:00:00"
