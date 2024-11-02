@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"time"
@@ -20,13 +21,15 @@ import (
 )
 
 var (
-	dstNetFlag  = flag.String("dst-net", "2001:610:1908:a000", "the destination network of the ipv6 tree")
-	imageFlag   = flag.String("image", "", "the image to ping to the tree")
-	xOffFlag    = flag.Int("x", 0, "the x offset to draw the image")
-	yOffFlag    = flag.Int("y", 0, "the y offset to draw the image")
-	rateFlag    = flag.Int("rate", 5, "how many times to draw the image per second")
-	workersFlag = flag.Int("workers", 1, "the number of workers to use")
-	onceFlag    = flag.Bool("once", false, "abort after 1 loop")
+	dstNetFlag    = flag.String("dst-net", "2001:610:1908:a000", "the destination network of the ipv6 tree")
+	liveImageFlag = flag.String("live-image-url", "http://fudge.snt.utwente.nl/live.png", "URL of the live PNG image")
+	useLiveImage  = flag.Bool("use-live-image", false, "enable or disable the use of the live image for comparison")
+	imageFlag     = flag.String("image", "", "the image to ping to the tree")
+	xOffFlag      = flag.Int("x", 0, "the x offset to draw the image")
+	yOffFlag      = flag.Int("y", 0, "the y offset to draw the image")
+	rateFlag      = flag.Int("rate", 5, "how many times to draw the image per second")
+	workersFlag   = flag.Int("workers", 1, "the number of workers to use")
+	onceFlag      = flag.Bool("once", false, "abort after 1 loop")
 
 	techniqueFlag = flag.String("technique", "standard", "drawing technique (standard, random, scanline, spiral, wave)")
 	waveAmpFlag   = flag.Float64("wave-amp", 10.0, "wave amplitude for wave drawing")
@@ -40,6 +43,21 @@ const (
 
 // filled on package initialization. Contains a simple ICMPv6 ECHO request.
 var pingPacket []byte
+
+// Fetch and decode the live image from the given URL
+func fetchLiveImage(url string) (image.Image, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching live image: %v", err)
+	}
+	defer resp.Body.Close()
+
+	img, _, err := image.Decode(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding live image: %v", err)
+	}
+	return img, nil
+}
 
 // worker drains the incoming channel, sending ping packets to the incoming
 // addresses.
@@ -151,9 +169,35 @@ func makeAddrs(img image.Image, dstNet string, xOff, yOff int) []*net.IPAddr {
 func main() {
 	flag.Parse()
 
-	if *imageFlag == "" {
-		fmt.Fprintln(os.Stderr, "the image flag must be provided")
-		os.Exit(1)
+	// Check if an image or live image should be used
+	var img image.Image
+	var err error
+
+	if *useLiveImage {
+		// Fetch the live image from the provided URL
+		img, err = fetchLiveImage(*liveImageFlag)
+		if err != nil {
+			log.Fatalf("could not fetch live image: %s", err)
+		}
+		log.Println("Using live image from URL.")
+	} else {
+		// Use the local image provided by imageFlag
+		if *imageFlag == "" {
+			fmt.Fprintln(os.Stderr, "the image flag must be provided when not using the live image")
+			os.Exit(1)
+		}
+
+		f, err := os.Open(*imageFlag)
+		if err != nil {
+			log.Fatalf("could not open image: %s", err)
+		}
+		defer f.Close()
+
+		img, _, err = image.Decode(f)
+		if err != nil {
+			log.Fatalf("could not decode image: %s", err)
+		}
+		log.Println("Using local image from file.")
 	}
 
 	technique := DrawingTechnique(*techniqueFlag)
@@ -170,47 +214,25 @@ func main() {
 	var frames [][]*net.IPAddr
 	var qLen int
 
-	{
-		var imgs []image.Image
+	bounds := img.Bounds()
+	log.Printf("image bounds: %d %d", bounds.Dx(), bounds.Dy())
 
-		{
-			f, err := os.Open(*imageFlag)
-			if err != nil {
-				log.Fatalf("could not open image: %s", err)
-			}
-			defer f.Close()
-
-			imgs, delays, err = decodeImage(f)
-			if err != nil {
-				log.Fatalf("could not decode image: %s", err)
-			}
-		}
-
-		bounds := imgs[0].Bounds()
-		log.Printf("image bounds: %d %d", bounds.Dx(), bounds.Dy())
-
-		for _, img := range imgs {
-			addrs := makeAddrsWithTechnique(
-				img,
-				*dstNetFlag,
-				*xOffFlag,
-				*yOffFlag,
-				technique,
-				*waveAmpFlag,
-				*waveFreqFlag,
-			)
-			if len(addrs) > qLen {
-				qLen = len(addrs)
-			}
-			frames = append(frames, addrs)
-		}
+	addrs := makeAddrsWithTechnique(
+		img,
+		*dstNetFlag,
+		*xOffFlag,
+		*yOffFlag,
+		technique,
+		*waveAmpFlag,
+		*waveFreqFlag,
+	)
+	if len(addrs) > qLen {
+		qLen = len(addrs)
 	}
+	frames = append(frames, addrs)
 
-	// If delay isn't set at this point, we just have one image. Use the
-	// provided flag to determine how many times to draw the image per second.
-	if delays == nil {
-		delays = []time.Duration{time.Second / time.Duration(*rateFlag)}
-	}
+	// Set default delay for image updates
+	delays = []time.Duration{time.Second / time.Duration(*rateFlag)}
 
 	log.Printf("queue length: %d", qLen)
 
