@@ -27,6 +27,10 @@ var (
 	rateFlag    = flag.Int("rate", 5, "how many times to draw the image per second")
 	workersFlag = flag.Int("workers", 1, "the number of workers to use")
 	onceFlag    = flag.Bool("once", false, "abort after 1 loop")
+
+	techniqueFlag = flag.String("technique", "standard", "drawing technique (standard, random, scanline, spiral, wave)")
+	waveAmpFlag   = flag.Float64("wave-amp", 10.0, "wave amplitude for wave drawing")
+	waveFreqFlag  = flag.Float64("wave-freq", 0.1, "wave frequency for wave drawing")
 )
 
 const (
@@ -152,13 +156,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	technique := DrawingTechnique(*techniqueFlag)
+
+	// Validate technique
+	switch technique {
+	case StandardTechnique, RandomTechnique, ScanlineTechnique, SpiralTechnique, WaveTechnique:
+		// valid
+	default:
+		log.Fatalf("invalid drawing technique: %s", technique)
+	}
+
 	var delays []time.Duration
 	var frames [][]*net.IPAddr
 	var qLen int
 
-	// Read the image frame(s), convert frames to addresses. Ensure everything
-	// image related is cleaned up ASAP so we don't hold on to pixels we don't
-	// need.
 	{
 		var imgs []image.Image
 
@@ -179,7 +190,15 @@ func main() {
 		log.Printf("image bounds: %d %d", bounds.Dx(), bounds.Dy())
 
 		for _, img := range imgs {
-			addrs := makeAddrs(img, *dstNetFlag, *xOffFlag, *yOffFlag)
+			addrs := makeAddrsWithTechnique(
+				img,
+				*dstNetFlag,
+				*xOffFlag,
+				*yOffFlag,
+				technique,
+				*waveAmpFlag,
+				*waveFreqFlag,
+			)
 			if len(addrs) > qLen {
 				qLen = len(addrs)
 			}
