@@ -33,6 +33,10 @@ var (
 	destInterfaceFlag = flag.String("interface", "eth0", "Use interface for outgoing traffic for pcap/pfring")
 	routermac         = flag.String("destmac", "00:00:5e:00:01:77", "Destination mac interface ( aka router )")
 	randomize         = flag.Bool("randomize", true, "randomize x/y for beter result on heavy pingload")
+
+	techniqueFlag = flag.String("technique", "standard", "drawing technique (standard, random, scanline, spiral, wave)")
+	waveAmpFlag   = flag.Float64("wave-amp", 10.0, "wave amplitude for wave drawing")
+	waveFreqFlag  = flag.Float64("wave-freq", 0.1, "wave frequency for wave drawing")
 )
 
 const (
@@ -163,13 +167,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	technique := DrawingTechnique(*techniqueFlag)
+
+	// Validate technique
+	switch technique {
+	case StandardTechnique, RandomTechnique, ScanlineTechnique, SpiralTechnique, WaveTechnique:
+		// valid
+	default:
+		log.Fatalf("invalid drawing technique: %s", technique)
+	}
+
 	var delays []time.Duration
 	var frames [][]*net.IPAddr
 	var qLen int
 
-	// Read the image frame(s), convert frames to addresses. Ensure everything
-	// image related is cleaned up ASAP so we don't hold on to pixels we don't
-	// need.
 	{
 		var imgs []image.Image
 
@@ -190,7 +201,15 @@ func main() {
 		log.Printf("image bounds: %d %d", bounds.Dx(), bounds.Dy())
 
 		for _, img := range imgs {
-			addrs := makeAddrs(img, *dstNetFlag, *xOffFlag, *yOffFlag)
+			addrs := makeAddrsWithTechnique(
+				img,
+				*dstNetFlag,
+				*xOffFlag,
+				*yOffFlag,
+				technique,
+				*waveAmpFlag,
+				*waveFreqFlag,
+			)
 			if len(addrs) > qLen {
 				qLen = len(addrs)
 			}
